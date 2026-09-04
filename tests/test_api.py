@@ -5,6 +5,10 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from src.config import load_model_config
+from src.inference import build_churn_prediction_response
+from src.model import load_churn_pipeline
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_PATH = PROJECT_ROOT / "models" / "churn_pipeline.joblib"
 CONFIG_PATH = PROJECT_ROOT / "models" / "model_config.json"
@@ -92,3 +96,31 @@ def test_predict_churn_invalid_service_combo(client) -> None:
 
     response = client.post("/predict_churn", json=payload)
     assert response.status_code == 422
+
+
+@pytest.mark.skipif(not PIPELINE_PATH.exists(), reason="pipeline artifact missing")
+def test_api_output_matches_direct_python_inference(
+    client,
+    sample_api_payload: dict,
+) -> None:
+    pipeline = load_churn_pipeline()
+    config = load_model_config()
+    expected = build_churn_prediction_response(pipeline, sample_api_payload, model_config=config)
+
+    response = client.post("/predict_churn", json=sample_api_payload)
+    assert response.status_code == 200
+    actual = response.json()
+
+    assert actual == expected
+
+
+@pytest.mark.skipif(not PIPELINE_PATH.exists(), reason="pipeline artifact missing")
+def test_api_threshold_decision_consistency(client, sample_api_payload: dict) -> None:
+    response = client.post("/predict_churn", json=sample_api_payload)
+    assert response.status_code == 200
+    result = response.json()
+
+    if result["churn_probability"] >= result["threshold"]:
+        assert result["prediction"] == "Churn"
+    else:
+        assert result["prediction"] == "No Churn"
