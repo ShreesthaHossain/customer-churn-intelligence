@@ -1,0 +1,4 @@
+Method,Brier_Score,PR_AUC,ROC_AUC,Mean_Calibration_Error,Proba_Mean,Proba_Min,Proba_Max
+Uncalibrated,0.1631,0.6399,0.8449,0.168,0.4053,0.0017,0.9757
+Sigmoid (Platt),0.136,0.6446,0.8452,0.0249,0.2729,0.0362,0.7758
+Isotonic,0.1362,0.6469,0.8455,0.0376,0.2736,0.002,1.0
