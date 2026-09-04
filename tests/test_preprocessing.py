@@ -32,10 +32,10 @@ def split_data():
 
 def test_build_preprocessor_column_groups() -> None:
     preprocessor = build_preprocessor()
-    transformers = dict(preprocessor.transformers)
+    transformers = {name: cols for name, _, cols in preprocessor.transformers}
 
-    assert transformers["num"][2] == NUMERIC_FEATURE_COLS
-    assert transformers["cat"][2] == CATEGORICAL_FEATURE_COLS
+    assert transformers["num"] == NUMERIC_FEATURE_COLS
+    assert transformers["cat"] == CATEGORICAL_FEATURE_COLS
 
 
 def test_fit_only_on_train(split_data) -> None:

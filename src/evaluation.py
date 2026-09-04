@@ -23,7 +23,8 @@ def encode_churn_labels(y: pd.Series | np.ndarray | list[str]) -> np.ndarray:
         values = y.to_numpy()
     else:
         values = np.asarray(y)
-    if values.dtype == object:
+
+    if not np.issubdtype(values.dtype, np.number):
         return (values == "Yes").astype(int)
     return values.astype(int)
 
