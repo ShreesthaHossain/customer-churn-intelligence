@@ -1,0 +1,40 @@
+{
+  "final_threshold": 0.1,
+  "model": "XGBoost + class weighting",
+  "calibration_method": "sigmoid (Platt)",
+  "test_metrics": {
+    "threshold": 0.1,
+    "precision": 0.4194,
+    "recall": 0.9075,
+    "f1": 0.5737,
+    "roc_auc": 0.8331,
+    "pr_auc": 0.6586,
+    "brier_score": 0.1401,
+    "predicted_churners": 608,
+    "true_negatives": 423,
+    "false_positives": 353,
+    "false_negatives": 26,
+    "true_positives": 255,
+    "total_cost_usd_simulated": 30650,
+    "accuracy": 0.6414,
+    "dataset": "test",
+    "n_samples": 1057,
+    "actual_churners": 281,
+    "calibration_method": "sigmoid (Platt)"
+  },
+  "validation_metrics_at_threshold": {
+    "threshold": 0.1,
+    "precision": 0.4154,
+    "recall": 0.9464,
+    "f1": 0.5773,
+    "roc_auc": 0.8452,
+    "pr_auc": 0.6446,
+    "brier_score": 0.136,
+    "predicted_churners": 638,
+    "true_negatives": 403,
+    "false_positives": 373,
+    "false_negatives": 15,
+    "true_positives": 265
+  },
+  "note": "Single final test evaluation. Test set not used for any prior tuning."
+}
