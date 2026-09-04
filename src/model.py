@@ -128,6 +128,13 @@ def load_model_bundle(path: Path | str | None = None) -> ChurnModelBundle:
     return bundle
 
 
+def load_churn_pipeline(path: Path | str | None = None) -> ChurnModelBundle:
+    """Load the saved inference pipeline artifact used by Streamlit and FastAPI."""
+    from src.config import churn_pipeline_path
+
+    return load_model_bundle(path or churn_pipeline_path())
+
+
 def run_training_pipeline(
     split: SplitData | None = None,
     *,

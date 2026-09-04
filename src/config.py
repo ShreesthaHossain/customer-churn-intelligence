@@ -25,6 +25,8 @@ DEFAULT_LOST_CUSTOMER_COST = 500
 
 CHOSEN_THRESHOLD_FILENAME = "chosen_threshold.json"
 MODEL_BUNDLE_FILENAME = "churn_model_bundle.joblib"
+CHURN_PIPELINE_FILENAME = "churn_pipeline.joblib"
+MODEL_CONFIG_FILENAME = "model_config.json"
 
 
 def project_root() -> Path:
@@ -54,6 +56,25 @@ def chosen_threshold_path() -> Path:
 
 def model_bundle_path() -> Path:
     return models_dir() / MODEL_BUNDLE_FILENAME
+
+
+def churn_pipeline_path() -> Path:
+    return models_dir() / CHURN_PIPELINE_FILENAME
+
+
+def model_config_path() -> Path:
+    return models_dir() / MODEL_CONFIG_FILENAME
+
+
+def load_model_config(path: Path | str | None = None) -> dict:
+    """Load the saved model configuration for apps and services."""
+    config_path = Path(path) if path else model_config_path()
+    if not config_path.exists():
+        raise FileNotFoundError(
+            f"Model config not found at {config_path.resolve()}. "
+            "Save the inference pipeline first."
+        )
+    return json.loads(config_path.read_text(encoding="utf-8"))
 
 
 def load_chosen_threshold_config(path: Path | str | None = None) -> dict:
