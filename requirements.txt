@@ -6,3 +6,4 @@ jupyter
 joblib
 xgboost
 imbalanced-learn
+shap
