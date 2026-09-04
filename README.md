@@ -66,8 +66,22 @@ See `notebooks/05_leakage_audit.ipynb` for the full column-by-column audit.
 
 See `notebooks/06_data_split.ipynb` for split verification.
 
+## Preprocessing
+
+Leakage-safe feature preprocessing is implemented in `src/preprocessing.py` and documented in `notebooks/07_preprocessing.ipynb`.
+
+| Column group | Columns | Transformation |
+|--------------|---------|----------------|
+| **Numeric** | 4 (`SeniorCitizen`, `tenure`, `MonthlyCharges`, `TotalCharges`) | `SimpleImputer(median)` → `StandardScaler` |
+| **Categorical** | 15 (service/plan/demographic fields) | `SimpleImputer(most_frequent)` → `OneHotEncoder(handle_unknown='ignore')` |
+
+- **Input features:** 19 raw cleaned columns → **45** transformed columns after one-hot expansion
+- **Fit policy:** preprocessor fitted on **`X_train` only**; validation/test use `transform()` only
+- **Excluded:** `customerID` (identifier) and `Churn` (target) never enter the transformer
+- **Persistence:** transformed arrays not saved; fitted preprocessor will be bundled with models in a later step
+
 ## Current Project Status
 
-**Stage 8: Train/Validation/Test Split complete**
+**Stage 9: Leakage-Safe Preprocessing complete**
 
-Steps 1–8 complete through stratified data splitting. No preprocessing or modeling yet.
+Steps 1–9 complete through preprocessing pipeline validation. No baseline or advanced modeling yet.
