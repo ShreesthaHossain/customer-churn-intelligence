@@ -1,0 +1,9 @@
+Model,Imbalance_Strategy,Precision,Recall,F1,ROC_AUC,PR_AUC
+LogisticRegression,Class weighting,0.5055,0.8143,0.6238,0.8449,0.6314
+LogisticRegression,Original,0.6459,0.5929,0.6182,0.8454,0.6309
+LogisticRegression,RandomUnderSampler,0.4978,0.8179,0.6189,0.8423,0.6306
+LogisticRegression,SMOTENC,0.511,0.7464,0.6067,0.8191,0.5752
+XGBoost,Class weighting,0.5333,0.8286,0.649,0.8449,0.6399
+XGBoost,Original,0.6483,0.5464,0.593,0.8426,0.6341
+XGBoost,RandomUnderSampler,0.5097,0.8464,0.6362,0.8352,0.6232
+XGBoost,SMOTENC,0.5452,0.6893,0.6088,0.8286,0.6045
