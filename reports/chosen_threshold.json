@@ -1,0 +1,23 @@
+{
+  "calibration_retained": true,
+  "calibration_method": "sigmoid (Platt)",
+  "threshold": 0.1,
+  "threshold_source": "validation_min_simulated_business_cost",
+  "probabilities": "calibrated",
+  "step16_uncalibrated_threshold": 0.26,
+  "step16_threshold_valid_after_calibration": false,
+  "validation_metrics_at_chosen_threshold": {
+    "Precision": 0.4154,
+    "Recall": 0.9464,
+    "F1": 0.5773,
+    "False_Positives": 373,
+    "False_Negatives": 15,
+    "Predicted_Churners": 638,
+    "Total_Cost_USD_simulated": 26150
+  },
+  "simulated_cost_assumptions": {
+    "retention_offer_cost_usd": 50,
+    "lost_customer_cost_usd": 500
+  },
+  "note": "Tuned on validation only. Test set not used."
+}
