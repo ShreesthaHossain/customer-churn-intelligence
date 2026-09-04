@@ -18,21 +18,13 @@ from src.data_loading import load_cleaned_churn_data, load_train_val_split
 from src.data_separation import CATEGORICAL_FEATURE_COLS
 from src.inference import predict_single_customer
 from src.model import ChurnModelBundle, load_churn_pipeline
-
-# UI-only risk band above the retention decision threshold.
-# This is NOT a model threshold — it separates "Elevated" from "High" for display.
-HIGH_RISK_UI_BAND = 0.50
-
-INTERNET_DEPENDENT_FIELDS = [
-    "OnlineSecurity",
-    "OnlineBackup",
-    "DeviceProtection",
-    "TechSupport",
-    "StreamingTV",
-    "StreamingMovies",
-]
-NO_INTERNET_SERVICE = "No internet service"
-NO_PHONE_SERVICE = "No phone service"
+from src.policy import (
+    HIGH_RISK_UI_BAND,
+    NO_INTERNET_SERVICE,
+    NO_PHONE_SERVICE,
+    classify_risk_level,
+    normalize_service_fields,
+)
 
 st.set_page_config(
     page_title="Customer Churn Intelligence",
@@ -119,21 +111,6 @@ def get_validation_pr_auc() -> float | None:
     return None
 
 
-def classify_risk_level(probability: float, decision_threshold: float) -> str:
-    """
-    Map probability to UI risk bands anchored on the frozen decision threshold.
-
-    - Low: below decision threshold (no retention outreach)
-    - Elevated: at/above threshold but below HIGH_RISK_UI_BAND
-    - High: at/above HIGH_RISK_UI_BAND (priority escalation display band)
-    """
-    if probability < decision_threshold:
-        return "Low"
-    if probability < HIGH_RISK_UI_BAND:
-        return "Elevated"
-    return "High"
-
-
 def risk_level_class(level: str) -> str:
     return {
         "Low": "risk-low",
@@ -165,28 +142,6 @@ def options_for_multiple_lines(phone_service: str, all_options: list[str]) -> li
     if phone_service == "No":
         return [NO_PHONE_SERVICE]
     return [opt for opt in all_options if opt != NO_PHONE_SERVICE]
-
-
-def normalize_service_fields(record: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
-    """Align internet/phone-dependent fields with parent service selections."""
-    normalized = dict(record)
-    notes: list[str] = []
-
-    if normalized["InternetService"] == "No":
-        for field in INTERNET_DEPENDENT_FIELDS:
-            if normalized[field] != NO_INTERNET_SERVICE:
-                normalized[field] = NO_INTERNET_SERVICE
-                notes.append(
-                    f"{field} was set to '{NO_INTERNET_SERVICE}' because Internet Service is No."
-                )
-
-    if normalized["PhoneService"] == "No" and normalized["MultipleLines"] != NO_PHONE_SERVICE:
-        normalized["MultipleLines"] = NO_PHONE_SERVICE
-        notes.append(
-            f"Multiple Lines was set to '{NO_PHONE_SERVICE}' because Phone Service is No."
-        )
-
-    return normalized, notes
 
 
 def build_customer_record(form_values: dict[str, Any]) -> dict[str, Any]:

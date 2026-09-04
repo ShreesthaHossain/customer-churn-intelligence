@@ -9,3 +9,6 @@ imbalanced-learn
 shap
 pytest
 streamlit
+fastapi
+uvicorn
+httpx

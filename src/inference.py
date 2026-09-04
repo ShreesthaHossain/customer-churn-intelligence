@@ -10,6 +10,13 @@ import pandas as pd
 from src.data_cleaning import IDENTIFIER_COL, TOTAL_CHARGES_COL, TENURE_COL
 from src.data_separation import FEATURE_COLS
 from src.model import ChurnModelBundle, load_model_bundle
+from src.policy import (
+    churn_prediction_label,
+    classify_risk_level,
+    model_version_from_config,
+    normalize_service_fields,
+    recommended_action,
+)
 from src.preprocessing import transform_features
 
 
@@ -101,6 +108,8 @@ def predict_batch(
 def predict_single_customer(
     bundle: ChurnModelBundle,
     record: Mapping[str, Any],
+    *,
+    model_config: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Score one raw customer record end-to-end without notebook dependencies.
@@ -108,8 +117,9 @@ def predict_single_customer(
     Returns calibrated probability and a retention recommendation based on the
     frozen validation threshold.
     """
-    customer_id = record.get(IDENTIFIER_COL)
-    features = prepare_inference_features(record)
+    normalized_record, _ = normalize_service_fields(dict(record))
+    customer_id = normalized_record.get(IDENTIFIER_COL)
+    features = prepare_inference_features(normalized_record)
     probability = float(predict_churn_probability(bundle, features)[0])
     retention_recommended = bool(probability >= bundle.threshold)
 
@@ -122,6 +132,28 @@ def predict_single_customer(
             "Probability and recommendation reflect model output; they do not "
             "establish causal reasons for churn."
         ),
+    }
+
+
+def build_churn_prediction_response(
+    bundle: ChurnModelBundle,
+    record: Mapping[str, Any],
+    *,
+    model_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Full prediction payload for API and dashboard consumers."""
+    base = predict_single_customer(bundle, record, model_config=model_config)
+    probability = base["churn_probability"]
+    threshold = float(base["decision_threshold"])
+
+    return {
+        "churn_probability": probability,
+        "threshold": threshold,
+        "prediction": churn_prediction_label(probability, threshold),
+        "risk_level": classify_risk_level(probability, threshold),
+        "recommended_action": recommended_action(base["retention_recommended"]),
+        "model_version": model_version_from_config(model_config),
+        "customerID": base.get(IDENTIFIER_COL),
     }
 
 
