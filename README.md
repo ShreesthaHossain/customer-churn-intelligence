@@ -50,8 +50,24 @@ Churn predictions are made for **active customers at a snapshot in time**. Featu
 
 See `notebooks/05_leakage_audit.ipynb` for the full column-by-column audit.
 
+## Validation Strategy
+
+| Partition | Share | Rows (approx.) | Purpose |
+|-----------|-------|----------------|---------|
+| **Training** | 70% | 4,930 | Fit models and **all learned preprocessing** (scaling, encoding, imputation) |
+| **Validation** | 15% | 1,056 | Model comparison, hyperparameter tuning, calibration, threshold optimization |
+| **Test** | 15% | 1,057 | **Final evaluation only** — untouched until model + decision policy are frozen |
+
+- **Split method:** Stratified two-stage split (`train_test_split` → 70% train vs 30% holdout, then holdout split 50/50 into validation and test)
+- **`random_state=42`** for reproducibility
+- **Stratification:** `Churn` class proportions preserved across all three sets (~26.5% Yes)
+- **Artifacts:** `data/processed/split_manifest.json` (indices + metadata only; no preprocessed test CSV)
+- **Preprocessing policy:** All transformers fitted on **training data only**, applied via sklearn `Pipeline`
+
+See `notebooks/06_data_split.ipynb` for split verification.
+
 ## Current Project Status
 
-**Stage 7: Leakage Audit complete**
+**Stage 8: Train/Validation/Test Split complete**
 
-Steps 1–7 complete: project setup, data understanding, cleaning, feature/target/ID separation, focused EDA, and leakage audit. No train/test split or modeling yet.
+Steps 1–8 complete through stratified data splitting. No preprocessing or modeling yet.
