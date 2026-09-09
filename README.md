@@ -6,6 +6,10 @@ Portfolio-quality ML engineering project that predicts telecom customer churn pr
 
 Predict the probability that an **active** telecom customer will churn, then apply a **frozen decision policy** to recommend retention outreach. The goal is not accuracy alone — ranking quality (PR-AUC), calibration, and cost-aware thresholding matter for imbalanced churn (~26.5% positive class).
 
+## Learning Guide
+
+New to the project or ML engineering? Start with [docs/00_INDEX.md](docs/00_INDEX.md) — a beginner-friendly, chapter-by-chapter walkthrough of every decision, notebook, and module (what was built, how, and why).
+
 ---
 
 ## Final Model
@@ -157,6 +161,17 @@ streamlit run app/app.py
 ```
 
 Interactive scoring for all 19 raw features, model summary, calibrated probability, risk level, and retention recommendation.
+
+### Batch upload (Streamlit)
+
+Use the **Batch upload** tab to:
+
+1. Upload a CSV and select a **primary key** column
+2. Run a **compatibility check** against the saved Telco model schema
+3. If compatible, score all customers and **download ranked predictions** (probability, risk level, retention flag, customer details)
+4. If incompatible, review fix suggestions, download the schema template from `data/templates/telco_scoring_template.csv`, or use the optional **session-only retrain fallback** when your file includes a churn label column
+
+The frozen production model in `models/` is never overwritten by upload scoring or session training.
 
 ---
 

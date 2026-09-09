@@ -29,7 +29,10 @@ class TransformedSplits:
     preprocessor: ColumnTransformer
 
 
-def build_preprocessor() -> ColumnTransformer:
+def build_preprocessor(
+    numeric_cols: list[str] | None = None,
+    categorical_cols: list[str] | None = None,
+) -> ColumnTransformer:
     """
     Build a ColumnTransformer for numeric scaling and categorical one-hot encoding.
 
@@ -37,6 +40,9 @@ def build_preprocessor() -> ColumnTransformer:
     StandardScaler supports scale-sensitive models (e.g., Logistic Regression).
     OneHotEncoder(handle_unknown='ignore') supports safe inference on unseen categories.
     """
+    numeric_cols = numeric_cols or NUMERIC_FEATURE_COLS
+    categorical_cols = categorical_cols or CATEGORICAL_FEATURE_COLS
+
     numeric_pipeline = Pipeline(
         steps=[
             ("imputer", SimpleImputer(strategy="median")),
@@ -54,11 +60,19 @@ def build_preprocessor() -> ColumnTransformer:
     )
     return ColumnTransformer(
         transformers=[
-            ("num", numeric_pipeline, NUMERIC_FEATURE_COLS),
-            ("cat", categorical_pipeline, CATEGORICAL_FEATURE_COLS),
+            ("num", numeric_pipeline, numeric_cols),
+            ("cat", categorical_pipeline, categorical_cols),
         ],
         remainder="drop",
     )
+
+
+def feature_cols_from_preprocessor(preprocessor: ColumnTransformer) -> list[str]:
+    """Return the input feature column list configured on a preprocessor."""
+    cols: list[str] = []
+    for _, _, col_list in preprocessor.transformers:
+        cols.extend(col_list)
+    return cols
 
 
 def get_transformed_feature_names(preprocessor: ColumnTransformer) -> list[str]:
@@ -68,14 +82,20 @@ def get_transformed_feature_names(preprocessor: ColumnTransformer) -> list[str]:
 
 def fit_preprocessor(preprocessor: ColumnTransformer, X_train: pd.DataFrame) -> ColumnTransformer:
     """Fit preprocessing on training features only (AGENTS.md rule 4)."""
-    _validate_feature_frame(X_train)
+    _validate_feature_frame(X_train, expected_cols=feature_cols_from_preprocessor(preprocessor))
     preprocessor.fit(X_train)
     return preprocessor
 
 
-def transform_features(preprocessor: ColumnTransformer, X: pd.DataFrame) -> np.ndarray:
+def transform_features(
+    preprocessor: ColumnTransformer,
+    X: pd.DataFrame,
+    *,
+    expected_cols: list[str] | None = None,
+) -> np.ndarray:
     """Transform features without refitting."""
-    _validate_feature_frame(X)
+    cols = expected_cols or feature_cols_from_preprocessor(preprocessor)
+    _validate_feature_frame(X, expected_cols=cols)
     return preprocessor.transform(X)
 
 
@@ -84,7 +104,7 @@ def fit_transform_train(
     X_train: pd.DataFrame,
 ) -> tuple[ColumnTransformer, np.ndarray]:
     """Fit on training data and return transformed training matrix."""
-    _validate_feature_frame(X_train)
+    _validate_feature_frame(X_train, expected_cols=feature_cols_from_preprocessor(preprocessor))
     X_train_transformed = preprocessor.fit_transform(X_train)
     return preprocessor, X_train_transformed
 
@@ -188,9 +208,9 @@ def run_preprocessing_pipeline(
     return transformed, preprocessor, validation
 
 
-def _validate_feature_frame(X: pd.DataFrame) -> None:
+def _validate_feature_frame(X: pd.DataFrame, expected_cols: list[str] | None = None) -> None:
     """Ensure input contains only approved predictive columns."""
-    expected = set(NUMERIC_FEATURE_COLS + CATEGORICAL_FEATURE_COLS)
+    expected = set(expected_cols or (NUMERIC_FEATURE_COLS + CATEGORICAL_FEATURE_COLS))
     actual = set(X.columns)
     if actual != expected:
         missing = expected - actual

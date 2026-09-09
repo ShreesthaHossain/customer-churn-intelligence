@@ -7,7 +7,7 @@ from typing import Any, Mapping
 import numpy as np
 import pandas as pd
 
-from src.data_cleaning import IDENTIFIER_COL, TOTAL_CHARGES_COL, TENURE_COL
+from src.data_cleaning import IDENTIFIER_COL, TARGET_COL, TOTAL_CHARGES_COL, TENURE_COL
 from src.data_separation import FEATURE_COLS
 from src.model import ChurnModelBundle, load_model_bundle
 from src.policy import (
@@ -18,6 +18,7 @@ from src.policy import (
     recommended_action,
 )
 from src.preprocessing import transform_features
+from src.upload_compatibility import apply_column_mapping
 
 
 def _normalize_total_charges(record: dict[str, Any]) -> float:
@@ -164,3 +165,101 @@ def load_bundle_and_predict(
     """Convenience wrapper: load saved bundle and score one customer record."""
     bundle = load_model_bundle(bundle_path)
     return predict_single_customer(bundle, record)
+
+
+def _normalize_total_charges_value(raw_value: Any, tenure: int) -> float:
+    if pd.isna(raw_value):
+        raise ValueError("TotalCharges cannot be missing.")
+
+    text = str(raw_value).strip()
+    if text == "":
+        if tenure != 0:
+            raise ValueError("Blank TotalCharges is only valid when tenure is 0.")
+        return 0.0
+
+    try:
+        return float(text)
+    except ValueError as exc:
+        raise ValueError(f"Invalid TotalCharges value: {raw_value!r}") from exc
+
+
+def _normalize_upload_row(row: pd.Series) -> pd.Series:
+    record = row.to_dict()
+    normalized, _ = normalize_service_fields(record)
+    normalized[TOTAL_CHARGES_COL] = _normalize_total_charges_value(
+        normalized[TOTAL_CHARGES_COL],
+        int(normalized[TENURE_COL]),
+    )
+    normalized[TENURE_COL] = int(normalized[TENURE_COL])
+    normalized["SeniorCitizen"] = int(normalized["SeniorCitizen"])
+    normalized["MonthlyCharges"] = float(normalized["MonthlyCharges"])
+    return pd.Series({col: normalized[col] for col in FEATURE_COLS})
+
+
+def prepare_batch_upload_features(
+    df: pd.DataFrame,
+    id_col: str,
+    *,
+    column_mapping: dict[str, str] | None = None,
+) -> tuple[pd.DataFrame, pd.Series, pd.DataFrame]:
+    """
+    Normalize an uploaded Telco-compatible dataframe for batch scoring.
+
+    Returns model-ready features, primary keys, and customer detail columns.
+    """
+    working = apply_column_mapping(df, column_mapping or {})
+    resolved_id_col = (column_mapping or {}).get(id_col, id_col)
+
+    if resolved_id_col not in working.columns:
+        raise ValueError(f"Primary key column '{id_col}' not found after column mapping.")
+
+    missing = [col for col in FEATURE_COLS if col not in working.columns]
+    if missing:
+        raise ValueError(f"Missing required feature columns: {missing}")
+
+    normalized_rows = [
+        _normalize_upload_row(row) for _, row in working[FEATURE_COLS].iterrows()
+    ]
+    features_df = pd.DataFrame(normalized_rows, columns=FEATURE_COLS)
+    customer_ids = working[resolved_id_col].astype(str).reset_index(drop=True)
+    details_df = working[FEATURE_COLS].reset_index(drop=True)
+    return features_df, customer_ids, details_df
+
+
+def score_uploaded_batch(
+    bundle: ChurnModelBundle,
+    df: pd.DataFrame,
+    id_col: str,
+    *,
+    column_mapping: dict[str, str] | None = None,
+) -> pd.DataFrame:
+    """Score an uploaded Telco-compatible CSV with the frozen or session bundle."""
+    features_df, customer_ids, details_df = prepare_batch_upload_features(
+        df,
+        id_col,
+        column_mapping=column_mapping,
+    )
+    threshold = float(bundle.threshold)
+    probabilities = predict_churn_probability(bundle, features_df)
+    retention_flags = probabilities >= threshold
+
+    output = pd.DataFrame(
+        {
+            "primary_key": customer_ids,
+            "churn_probability": np.round(probabilities, 4),
+            "prediction": [churn_prediction_label(float(p), threshold) for p in probabilities],
+            "risk_level": [classify_risk_level(float(p), threshold) for p in probabilities],
+            "retention_recommended": retention_flags.astype(int),
+            "recommended_action": [recommended_action(bool(flag)) for flag in retention_flags],
+            "decision_threshold": threshold,
+        }
+    )
+
+    for col in FEATURE_COLS:
+        output[col] = details_df[col]
+
+    working = apply_column_mapping(df, column_mapping or {})
+    if TARGET_COL in working.columns:
+        output["actual_churn"] = working[TARGET_COL].reset_index(drop=True)
+
+    return output.sort_values("churn_probability", ascending=False).reset_index(drop=True)
