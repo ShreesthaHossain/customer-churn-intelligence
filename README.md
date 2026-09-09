@@ -166,10 +166,18 @@ Interactive scoring for all 19 raw features, model summary, calibrated probabili
 
 Use the **Batch upload** tab to:
 
-1. Upload a CSV and select a **primary key** column
-2. Run a **compatibility check** against the saved Telco model schema
-3. If compatible, score all customers and **download ranked predictions** (probability, risk level, retention flag, customer details)
-4. If incompatible, review fix suggestions, download the schema template from `data/templates/telco_scoring_template.csv`, or use the optional **session-only retrain fallback** when your file includes a churn label column
+1. Upload a CSV (or click **Try with sample Telco data**)
+2. Review the **19/19 readiness checklist** — column order does not matter, only names and values
+3. Map your columns to the required Telco fields using the **column mapper** if needed
+4. Select a unique **primary key** column (auto-detected when possible)
+5. Click **Score all customers** and **download ranked predictions** (probability, risk level, retention flag, customer details)
+
+If the file is not compatible, the app shows plain-language fix steps plus downloads for:
+
+- `data/templates/telco_scoring_template.csv` — example file with valid headers and one row
+- `data/templates/telco_column_guide.csv` — human-readable description of each required column
+
+Optional **session-only retrain fallback** is available when your file includes a churn label column but does not match the Telco schema.
 
 The frozen production model in `models/` is never overwritten by upload scoring or session training.
 
@@ -196,7 +204,7 @@ Example response fields: `churn_probability`, `threshold`, `prediction`, `risk_l
 pytest tests/ -v
 ```
 
-Coverage includes data cleaning, splits, preprocessing, inference, policy consistency, saved artifact loading, API parity with Python inference, and unseen-category handling. **63 tests** (validation/test artifacts; no test-set tuning in tests).
+Coverage includes data cleaning, splits, preprocessing, inference, upload compatibility, policy consistency, saved artifact loading, API parity with Python inference, and unseen-category handling. **79 tests** (validation/test artifacts; no test-set tuning in tests).
 
 ---
 

@@ -10,13 +10,25 @@ import pandas as pd
 import streamlit as st
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+APP_DIR = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+if str(APP_DIR) not in sys.path:
+    sys.path.insert(0, str(APP_DIR))
 
 from src.config import load_model_config, reports_dir
-from src.data_cleaning import IDENTIFIER_COL, TARGET_COL
+from src.data_cleaning import TARGET_COL
 from src.data_loading import load_cleaned_churn_data, load_train_val_split
-from src.data_separation import CATEGORICAL_FEATURE_COLS, FEATURE_COLS
+from upload_ui import (
+    get_upload_dataframe,
+    initialize_upload_dataframe,
+    load_sample_upload_data,
+    render_compatibility_report,
+    render_template_downloads,
+    render_upload_help_box,
+    resolve_upload_settings,
+)
+from src.data_separation import CATEGORICAL_FEATURE_COLS
 from src.inference import predict_single_customer, score_uploaded_batch
 from src.model import ChurnModelBundle, load_churn_pipeline
 from src.policy import (
@@ -27,11 +39,7 @@ from src.policy import (
     normalize_service_fields,
 )
 from src.training_service import train_and_score_upload
-from src.upload_compatibility import (
-    check_upload_compatibility,
-    load_schema_template,
-    suggest_column_renames,
-)
+from src.upload_compatibility import check_upload_compatibility
 
 st.set_page_config(
     page_title="Customer Churn Intelligence",
@@ -270,46 +278,6 @@ def _init_session_defaults(defaults: dict[str, Any]) -> None:
     st.session_state["_form_initialized"] = True
 
 
-def render_compatibility_report(report) -> None:
-    if report.is_compatible:
-        st.success("This file is compatible with the saved Telco churn model.")
-    else:
-        st.error("This file is not compatible with the saved Telco churn model.")
-
-    if report.blocking_errors:
-        st.markdown("**Blocking issues**")
-        for issue in report.blocking_errors:
-            st.markdown(f"- {issue}")
-
-    if report.missing_features:
-        st.markdown("**Missing feature columns**")
-        st.code(", ".join(report.missing_features))
-
-    if report.rename_suggestions:
-        st.markdown("**Suggested column mapping**")
-        mapping_df = pd.DataFrame(
-            [{"Uploaded column": src, "Expected column": dst} for src, dst in report.rename_suggestions.items()]
-        )
-        st.dataframe(mapping_df, use_container_width=True, hide_index=True)
-
-    if report.warnings:
-        st.markdown("**Warnings**")
-        for warning in report.warnings:
-            st.markdown(f"- {warning}")
-
-    if report.service_field_issues:
-        with st.expander(f"Service-field auto-fixes ({len(report.service_field_issues)})"):
-            for note in report.service_field_issues[:20]:
-                st.caption(note)
-            if len(report.service_field_issues) > 20:
-                st.caption(f"... and {len(report.service_field_issues) - 20} more rows.")
-
-    if report.suggested_actions:
-        st.markdown("**Suggested next steps**")
-        for action in report.suggested_actions:
-            st.markdown(f"- {action}")
-
-
 def render_batch_results(results: pd.DataFrame, *, session_model: bool = False) -> None:
     total = len(results)
     predicted_churners = int(results["retention_recommended"].sum())
@@ -345,60 +313,49 @@ def render_batch_results(results: pd.DataFrame, *, session_model: bool = False) 
 
 def render_batch_upload_tab(pipeline: ChurnModelBundle, config: dict[str, Any]) -> None:
     st.subheader("Batch Upload")
-    st.caption(
-        "Upload a CSV to check whether the saved Telco model can score it. "
-        "If compatible, you will get ranked churn predictions with customer details."
-    )
+    render_upload_help_box()
 
     uploaded = st.file_uploader("Upload customer CSV", type=["csv"])
-    if uploaded is None:
-        template_df = load_schema_template()
-        st.markdown("**Required schema**")
-        st.caption(
-            "Your file needs the 19 Telco feature columns used by the saved model. "
-            "Download the template below if you need a starting point."
-        )
-        st.dataframe(template_df.head(1), use_container_width=True, hide_index=True)
-        st.download_button(
-            "Download schema template (CSV)",
-            data=template_df.to_csv(index=False).encode("utf-8"),
-            file_name="telco_scoring_template.csv",
-            mime="text/csv",
-        )
-        return
+    sample_col1, sample_col2 = st.columns([1, 2])
+    with sample_col1:
+        if st.button("Try with sample Telco data", use_container_width=True):
+            sample_df = load_sample_upload_data()
+            if sample_df is None:
+                st.error("Sample data not found. Run the data cleaning step first.")
+            else:
+                initialize_upload_dataframe(sample_df)
+                st.session_state["batch_upload_signature"] = ("sample_data", len(sample_df))
+                st.rerun()
 
-    try:
-        upload_df = pd.read_csv(uploaded)
-    except Exception as exc:
-        st.error(f"Could not read CSV: {exc}")
+    if uploaded is not None:
+        upload_signature = (uploaded.name, uploaded.size)
+        if st.session_state.get("batch_upload_signature") != upload_signature:
+            try:
+                initialize_upload_dataframe(pd.read_csv(uploaded))
+                st.session_state["batch_upload_signature"] = upload_signature
+            except Exception as exc:
+                st.error(f"Could not read CSV: {exc}")
+                return
+
+    upload_df = get_upload_dataframe()
+    if upload_df is None:
+        st.markdown("**Get started**")
+        st.caption(
+            "Upload your customer CSV or try the sample data button. "
+            "Use the templates below if you need a reference."
+        )
+        render_template_downloads()
         return
 
     st.markdown(f"**Rows:** {len(upload_df):,} | **Columns:** {len(upload_df.columns)}")
     st.dataframe(upload_df.head(), use_container_width=True, hide_index=True)
 
-    id_candidates = list(upload_df.columns)
-    default_id = IDENTIFIER_COL if IDENTIFIER_COL in upload_df.columns else id_candidates[0]
-    id_col = st.selectbox(
-        "Primary key column",
-        options=id_candidates,
-        index=id_candidates.index(default_id),
-        help="Must uniquely identify each customer row in the output.",
-    )
-
-    suggested = suggest_column_renames(list(upload_df.columns), FEATURE_COLS + [IDENTIFIER_COL, TARGET_COL])
-    use_suggestions = False
-    if suggested:
-        use_suggestions = st.checkbox(
-            "Apply suggested column mapping",
-            value=all(dst not in upload_df.columns for dst in suggested.values()),
-        )
-
-    column_mapping = suggested if use_suggestions else {}
+    id_col, column_mapping, _readiness = resolve_upload_settings(upload_df)
     report = check_upload_compatibility(upload_df, id_col, column_mapping=column_mapping)
     render_compatibility_report(report)
 
     if report.is_compatible:
-        if st.button("Score customers with saved model", type="primary", use_container_width=True):
+        if st.button("Score all customers", type="primary", use_container_width=True):
             with st.spinner("Scoring uploaded customers..."):
                 try:
                     results = score_uploaded_batch(
@@ -419,6 +376,7 @@ def render_batch_upload_tab(pipeline: ChurnModelBundle, config: dict[str, Any]) 
         render_batch_results(st.session_state["batch_results"])
 
     if not report.is_compatible:
+        render_template_downloads()
         with st.expander("Train on your data instead (session-only fallback)"):
             st.caption(
                 "Use this only when your file has a binary churn label but does not match "

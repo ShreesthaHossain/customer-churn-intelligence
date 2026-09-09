@@ -1,0 +1,22 @@
+expected_column,description
+customerID,Unique customer identifier (one per row).
+gender,Customer gender: Female or Male.
+SeniorCitizen,1 if senior citizen otherwise 0.
+Partner,Whether customer has a partner: Yes or No.
+Dependents,Whether customer has dependents: Yes or No.
+tenure,Months as a customer (0-100).
+PhoneService,Phone service: Yes or No.
+MultipleLines,Multiple phone lines: Yes No or No phone service.
+InternetService,Internet type: No DSL or Fiber optic.
+OnlineSecurity,Online security add-on: Yes No or No internet service.
+OnlineBackup,Online backup add-on: Yes No or No internet service.
+DeviceProtection,Device protection add-on: Yes No or No internet service.
+TechSupport,Tech support add-on: Yes No or No internet service.
+StreamingTV,Streaming TV add-on: Yes No or No internet service.
+StreamingMovies,Streaming movies add-on: Yes No or No internet service.
+Contract,Contract type: Month-to-month One year or Two year.
+PaperlessBilling,Paperless billing: Yes or No.
+PaymentMethod,Payment method (Electronic check Mailed check Bank transfer automatic Credit card automatic).
+MonthlyCharges,Current monthly charge amount (numeric >= 0).
+TotalCharges,Lifetime charges (numeric; blank only when tenure is 0).
+Churn,Optional churn label for comparison or session retraining.
