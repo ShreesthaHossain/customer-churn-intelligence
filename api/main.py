@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 import sys
+import time
+import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any, Literal, Union
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -15,9 +18,12 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.config import load_model_config
+from src.deployment import configure_logging, get_settings, require_api_key
 from src.inference import build_churn_prediction_response
 from src.model import ChurnModelBundle, load_churn_pipeline
 from src.policy import NO_INTERNET_SERVICE, NO_PHONE_SERVICE, normalize_service_fields
+
+logger = logging.getLogger("churn.api")
 
 Gender = Literal["Female", "Male"]
 YesNo = Literal["Yes", "No"]
@@ -122,10 +128,26 @@ class HealthResponse(BaseModel):
     status: Literal["ok"]
     model_loaded: bool
     model_version: str | None = None
+    environment: str
+    auth_enabled: bool
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    from src.deployment import load_env_file
+
+    load_env_file()
+    get_settings.cache_clear()
+    configure_logging()
+    settings = get_settings()
+    logger.info(
+        "api_startup",
+        extra={
+            "event": "api_startup",
+            "environment": settings.environment,
+            "auth_enabled": settings.auth_enabled,
+        },
+    )
     app.state.pipeline = load_churn_pipeline()
     app.state.model_config = load_model_config()
     yield
@@ -139,10 +161,33 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request.state.request_id = request_id
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = round((time.perf_counter() - start) * 1000, 2)
+    logger.info(
+        "request_completed",
+        extra={
+            "event": "request_completed",
+            "request_id": request_id,
+            "method": request.method,
+            "path": request.url.path,
+            "status_code": response.status_code,
+            "duration_ms": duration_ms,
+        },
+    )
+    response.headers["X-Request-ID"] = request_id
+    return response
+
+
 @app.get("/health", response_model=HealthResponse)
 def health(request: Request) -> HealthResponse:
     pipeline: ChurnModelBundle | None = getattr(request.app.state, "pipeline", None)
     config: dict[str, Any] | None = getattr(request.app.state, "model_config", None)
+    settings = get_settings()
     model_version = None
     if config:
         from src.policy import model_version_from_config
@@ -152,13 +197,20 @@ def health(request: Request) -> HealthResponse:
         status="ok",
         model_loaded=pipeline is not None,
         model_version=model_version,
+        environment=settings.environment,
+        auth_enabled=settings.auth_enabled,
     )
 
 
 @app.post("/predict_churn", response_model=PredictChurnResponse)
-def predict_churn(customer: CustomerFeatures, request: Request) -> PredictChurnResponse:
+def predict_churn(
+    customer: CustomerFeatures,
+    request: Request,
+    _: None = Depends(require_api_key),
+) -> PredictChurnResponse:
     pipeline: ChurnModelBundle = request.app.state.pipeline
     config: dict[str, Any] = request.app.state.model_config
+    request_id = getattr(request.state, "request_id", None)
 
     record = customer.model_dump()
     record, _ = normalize_service_fields(record)
@@ -168,6 +220,21 @@ def predict_churn(customer: CustomerFeatures, request: Request) -> PredictChurnR
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception(
+            "prediction_failed",
+            extra={"event": "prediction_failed", "request_id": request_id},
+        )
         raise HTTPException(status_code=500, detail=f"Prediction failed: {exc}") from exc
 
+    logger.info(
+        "prediction_completed",
+        extra={
+            "event": "prediction_completed",
+            "request_id": request_id,
+            "customer_id": result.get("customerID"),
+            "churn_probability": result["churn_probability"],
+            "prediction": result["prediction"],
+            "model_version": result.get("model_version"),
+        },
+    )
     return PredictChurnResponse(**result)

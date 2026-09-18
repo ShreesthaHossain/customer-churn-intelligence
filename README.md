@@ -251,13 +251,13 @@ python -c "from src.data_separation import run_separation_pipeline; run_separati
 python -c "from src.data_split import run_split_pipeline; run_split_pipeline()"
 ```
 
-### 3. Train/save pipeline (if artifacts missing)
+### 3. Build artifacts (if `models/` is missing)
 
 ```bash
-python -c "from src.model import run_training_pipeline; run_training_pipeline()"
+python scripts/bootstrap_artifacts.py
 ```
 
-Pre-built artifacts are in `models/` for inference apps.
+This downloads the public Telco dataset (when needed), rebuilds processed data, trains the calibrated model, and writes `models/churn_pipeline.joblib` plus `models/model_config.json`.
 
 ### 4. Run apps
 
@@ -266,13 +266,36 @@ streamlit run app/app.py
 uvicorn api.main:app --reload
 ```
 
-### 5. Tests
+Optional API auth for production:
+
+```bash
+set CHURN_API_KEY=your-secret-key   # Windows
+export CHURN_API_KEY=your-secret-key  # Linux/macOS
+```
+
+Clients must then send `X-API-Key: your-secret-key` on `POST /predict_churn`. `/health` stays public.
+
+### 5. Docker (production scaffold)
+
+```bash
+docker compose up --build
+```
+
+- API: http://localhost:8000 (`/health`, `/predict_churn`)
+- Streamlit: http://localhost:8501
+
+Copy `.env.example` to `.env` and set `CHURN_API_KEY` before deploying.
+
+### 6. Tests
 
 ```bash
 pytest tests/ -v
+python scripts/audit_project.py
 ```
 
-### 6. Notebooks
+CI (GitHub Actions) runs bootstrap + tests + audit on every push/PR.
+
+### 7. Notebooks
 
 Execute in order (`01_eda` … `17_final_test_evaluation`) for the full analytical narrative.
 

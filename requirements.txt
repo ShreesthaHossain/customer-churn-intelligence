@@ -1,14 +1,2 @@
-pandas
-numpy
-matplotlib
-scikit-learn
-jupyter
-joblib
-xgboost
-imbalanced-learn
-shap
-pytest
-streamlit
-fastapi
-uvicorn
-httpx
+# Default install for local development (pinned via requirements-dev.txt)
+-r requirements-dev.txt

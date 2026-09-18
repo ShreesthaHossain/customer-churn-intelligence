@@ -1,0 +1,9 @@
+customerID,Churn,SeniorCitizen,tenure,MonthlyCharges,TotalCharges,gender,Partner,Dependents,PhoneService,MultipleLines,InternetService,OnlineSecurity,OnlineBackup,DeviceProtection,TechSupport,StreamingTV,StreamingMovies,Contract,PaperlessBilling,PaymentMethod
+9945-PSVIP,No,0,25,18.7,383.65,Female,Yes,Yes,Yes,No,No,No internet service,No internet service,No internet service,No internet service,No internet service,No internet service,Two year,Yes,Mailed check
+1143-NMNQJ,Yes,0,2,85.7,169.8,Female,No,No,Yes,Yes,Fiber optic,No,No,No,No,No,Yes,Month-to-month,Yes,Electronic check
+5027-YOCXN,No,0,51,110.05,5686.4,Male,Yes,Yes,Yes,Yes,Fiber optic,Yes,Yes,No,Yes,Yes,Yes,One year,No,Credit card (automatic)
+2694-CIUMO,No,0,12,79.55,958.25,Female,No,No,Yes,Yes,Fiber optic,No,No,No,Yes,No,No,Month-to-month,Yes,Credit card (automatic)
+2159-TURXX,No,0,5,20.05,95.55,Male,No,No,Yes,No,No,No internet service,No internet service,No internet service,No internet service,No internet service,No internet service,Month-to-month,No,Credit card (automatic)
+8707-HOEDG,No,0,70,110.2,7689.8,Female,Yes,Yes,Yes,Yes,Fiber optic,No,Yes,Yes,Yes,Yes,Yes,Two year,Yes,Electronic check
+4500-HKANN,No,0,23,59.7,1414.2,Male,Yes,Yes,Yes,Yes,DSL,No,Yes,No,Yes,No,No,Two year,No,Mailed check
+2782-LFZVW,No,0,11,58.95,601.6,Female,No,No,Yes,Yes,DSL,No,No,No,No,No,Yes,Month-to-month,Yes,Mailed check

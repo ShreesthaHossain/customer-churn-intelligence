@@ -28,15 +28,16 @@ from upload_ui import (
     render_upload_help_box,
     resolve_upload_settings,
 )
-from src.data_separation import CATEGORICAL_FEATURE_COLS
+from src.data_separation import CATEGORICAL_FEATURE_COLS, FEATURE_COLS
 from src.inference import predict_single_customer, score_uploaded_batch
 from src.model import ChurnModelBundle, load_churn_pipeline
+from src.deployment import get_settings, load_env_file
 from src.policy import (
     HIGH_RISK_UI_BAND,
     NO_INTERNET_SERVICE,
-    NO_PHONE_SERVICE,
     classify_risk_level,
     normalize_service_fields,
+    recommended_action,
 )
 from src.training_service import train_and_score_upload
 from src.upload_compatibility import check_upload_compatibility
@@ -78,6 +79,19 @@ CUSTOM_CSS = """
         border-radius: 8px;
         margin-top: 0.75rem;
         font-size: 0.92rem;
+    }
+    .batch-action-card {
+        background: #fff;
+        border: 1px solid #d9dee7;
+        border-left: 4px solid #e37400;
+        border-radius: 12px;
+        padding: 1rem 1.25rem;
+        margin-bottom: 0.75rem;
+    }
+    .batch-action-card .action-headline {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin: 0.35rem 0 0.5rem 0;
     }
 </style>
 """
@@ -134,6 +148,75 @@ def risk_level_class(level: str) -> str:
     }.get(level, "")
 
 
+BATCH_ACTION_COLUMNS = [
+    "primary_key",
+    "churn_probability",
+    "risk_level",
+    "prediction",
+    "retention_recommended",
+    "recommended_action",
+]
+
+INTERPRETATION_NOTE = (
+    "Probability and recommendation reflect model output; they do not "
+    "establish causal reasons for churn."
+)
+
+
+def _batch_action_columns(results: pd.DataFrame) -> list[str]:
+    cols = [col for col in BATCH_ACTION_COLUMNS if col in results.columns]
+    if "actual_churn" in results.columns:
+        cols.append("actual_churn")
+    return cols
+
+
+def _format_batch_action_table(df: pd.DataFrame) -> pd.DataFrame:
+    """Human-readable display for the action summary table."""
+    formatted = df.copy()
+    if "churn_probability" in formatted.columns:
+        formatted["churn_probability"] = formatted["churn_probability"].map(lambda p: f"{p:.1%}")
+    if "retention_recommended" in formatted.columns:
+        formatted["retention_recommended"] = formatted["retention_recommended"].map(
+            {1: "Yes — outreach", 0: "No — monitor"}
+        )
+    return formatted
+
+
+def _render_batch_priority_actions(flagged: pd.DataFrame, *, max_visible: int = 10) -> None:
+    st.markdown("**Priority retention outreach**")
+    st.caption("Customers flagged at or above the decision threshold, highest risk first.")
+
+    for _, row in flagged.head(max_visible).iterrows():
+        probability = float(row["churn_probability"])
+        risk = str(row["risk_level"])
+        action = str(row["recommended_action"])
+        st.markdown(
+            '<div class="batch-action-card">'
+            f'<div class="result-label">{row["primary_key"]}</div>'
+            f'<span class="result-value" style="font-size:1.15rem;margin-bottom:0">'
+            f'{probability:.1%}</span> '
+            f'<span class="result-value {risk_level_class(risk)}" '
+            f'style="font-size:1rem;margin-bottom:0">{risk}</span>'
+            f'<div class="result-label" style="margin-top:0.75rem">Recommended Action</div>'
+            f'<div class="action-headline">{action}</div>'
+            "</div>",
+            unsafe_allow_html=True,
+        )
+
+    remaining = len(flagged) - max_visible
+    if remaining > 0:
+        with st.expander(f"Show {remaining} more flagged customer{'s' if remaining != 1 else ''}"):
+            for _, row in flagged.iloc[max_visible:].iterrows():
+                probability = float(row["churn_probability"])
+                risk = str(row["risk_level"])
+                action = str(row["recommended_action"])
+                st.markdown(
+                    f"**{row['primary_key']}** · {probability:.1%} · "
+                    f"**{risk}** risk  \n"
+                    f"**Recommended Action:** {action}"
+                )
+
+
 def risk_band_policy_text(decision_threshold: float) -> str:
     return (
         f"**Decision threshold (model policy):** `{decision_threshold:.2f}` — probabilities "
@@ -151,12 +234,6 @@ def options_for_internet_dependent(internet_service: str, all_options: list[str]
     if internet_service == "No":
         return [NO_INTERNET_SERVICE]
     return all_options
-
-
-def options_for_multiple_lines(phone_service: str, all_options: list[str]) -> list[str]:
-    if phone_service == "No":
-        return [NO_PHONE_SERVICE]
-    return [opt for opt in all_options if opt != NO_PHONE_SERVICE]
 
 
 def build_customer_record(form_values: dict[str, Any]) -> dict[str, Any]:
@@ -222,6 +299,40 @@ def render_model_summary(config: dict[str, Any]) -> None:
         st.markdown(risk_band_policy_text(float(config["decision_threshold"])))
 
 
+def render_developer_api_section() -> None:
+    """Sidebar links for FastAPI integration and interactive docs."""
+    load_env_file()
+    get_settings.cache_clear()
+    settings = get_settings()
+
+    st.markdown("---")
+    st.subheader("Developer / API access")
+    st.caption(
+        "Integrate the same churn model into CRM, scripts, or other apps via the FastAPI service."
+    )
+
+    st.link_button("Open interactive API docs", settings.api_docs_url, use_container_width=True)
+    st.markdown(f"**Health check:** [{settings.api_health_url}]({settings.api_health_url})")
+    st.markdown("**Score one customer:** `POST /predict_churn`")
+    st.markdown(
+        "Send the same 19 customer fields as JSON. Response includes "
+        "`churn_probability`, `risk_level`, and `recommended_action`."
+    )
+
+    if settings.auth_enabled:
+        st.info(
+            "API key required. Send header `X-API-Key` on `POST /predict_churn`. "
+            "Keys are configured by the server admin in `.env` — not generated here."
+        )
+    else:
+        st.caption("API auth is off locally — no key needed until `CHURN_API_KEY` is set.")
+
+    with st.expander("Example request header"):
+        if settings.auth_enabled:
+            st.code("X-API-Key: <your-api-key>", language="http")
+        st.code(f"POST {settings.api_base_url.rstrip('/')}/predict_churn", language="http")
+
+
 def render_prediction_results(
     result: dict[str, Any],
     threshold: float,
@@ -229,11 +340,7 @@ def render_prediction_results(
     probability = result["churn_probability"]
     risk_level = classify_risk_level(probability, threshold)
     predicted_label = "Churn" if probability >= threshold else "No Churn"
-    retention_action = (
-        "Recommend retention outreach — offer proactive save campaign."
-        if result["retention_recommended"]
-        else "Routine monitoring — no immediate retention outreach."
-    )
+    retention_action = recommended_action(bool(result["retention_recommended"]))
 
     st.markdown('<div class="result-panel">', unsafe_allow_html=True)
 
@@ -265,9 +372,24 @@ def render_prediction_results(
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-def _index_for_option(field: str, available: list[str]) -> int:
-    preferred = st.session_state.get(f"field_{field}", available[0])
-    return available.index(preferred) if preferred in available else 0
+def _select_index(field: str, choices: list[str]) -> int:
+    """Safe selectbox index — avoids crashes when stored value is not in choices."""
+    if not choices:
+        return 0
+    preferred = st.session_state.get(f"field_{field}", choices[0])
+    return choices.index(preferred) if preferred in choices else 0
+
+
+def _internet_addon_options(internet_service: str, field: str, options: dict[str, list[str]]) -> list[str]:
+    return options_for_internet_dependent(internet_service, options[field])
+
+
+def _sync_profile_session(form_values: dict[str, Any]) -> None:
+    """Persist submitted profile values so dropdowns stay consistent on rerun."""
+    for key, value in form_values.items():
+        if key == "customerID":
+            continue
+        st.session_state[f"field_{key}"] = value
 
 
 def _init_session_defaults(defaults: dict[str, Any]) -> None:
@@ -278,15 +400,50 @@ def _init_session_defaults(defaults: dict[str, Any]) -> None:
     st.session_state["_form_initialized"] = True
 
 
+def _session_field(field: str) -> Any:
+    return st.session_state[f"field_{field}"]
+
+
+def _hidden_profile_defaults() -> dict[str, Any]:
+    """Defaults for fields not shown in the simplified customer form."""
+    return {
+        "gender": _session_field("gender"),
+        "SeniorCitizen": int(_session_field("SeniorCitizen")),
+        "Partner": _session_field("Partner"),
+        "Dependents": _session_field("Dependents"),
+        "PhoneService": _session_field("PhoneService"),
+        "MultipleLines": _session_field("MultipleLines"),
+        "OnlineBackup": _session_field("OnlineBackup"),
+        "DeviceProtection": _session_field("DeviceProtection"),
+        "PaperlessBilling": _session_field("PaperlessBilling"),
+    }
+
+
 def render_batch_results(results: pd.DataFrame, *, session_model: bool = False) -> None:
     total = len(results)
     predicted_churners = int(results["retention_recommended"].sum())
     high_risk = int((results["risk_level"] == "High").sum())
+    routine_count = total - predicted_churners
+    flagged = results[results["retention_recommended"] == 1]
 
-    c1, c2, c3 = st.columns(3)
+    c1, c2, c3, c4 = st.columns(4)
     c1.metric("Customers scored", total)
     c2.metric("Retention outreach flagged", predicted_churners)
-    c3.metric("High-risk customers", high_risk)
+    c3.metric("Routine monitoring", routine_count)
+    c4.metric("High-risk customers", high_risk)
+
+    st.markdown('<div class="result-panel">', unsafe_allow_html=True)
+    st.markdown('<div class="result-label">Batch Recommended Actions</div>', unsafe_allow_html=True)
+    if predicted_churners > 0:
+        customer_word = "customer" if predicted_churners == 1 else "customers"
+        st.markdown(
+            f"### {predicted_churners} {customer_word} need retention outreach · "
+            f"{routine_count} in routine monitoring"
+        )
+    else:
+        st.markdown("### Routine monitoring — no immediate retention outreach for this batch.")
+    st.markdown(f'<div class="policy-note">{INTERPRETATION_NOTE}</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
     if session_model:
         st.warning(
@@ -294,14 +451,35 @@ def render_batch_results(results: pd.DataFrame, *, session_model: bool = False) 
             "They do not use the frozen production Telco pipeline."
         )
 
+    if predicted_churners > 0:
+        _render_batch_priority_actions(flagged)
+    else:
+        st.success("All scored customers are below the retention outreach threshold.")
+
     show_flagged = st.checkbox("Show only retention outreach customers", value=False)
-    display = results.copy()
-    if show_flagged:
-        display = display[display["retention_recommended"] == 1]
+    filtered = results[results["retention_recommended"] == 1] if show_flagged else results
 
-    st.dataframe(display, use_container_width=True, hide_index=True)
+    action_tab, details_tab = st.tabs(["Actions & scores", "Full customer details"])
+    action_cols = _batch_action_columns(results)
 
-    csv_bytes = display.to_csv(index=False).encode("utf-8")
+    with action_tab:
+        st.caption("Decision columns only — use the second tab for the full customer profile.")
+        st.dataframe(
+            _format_batch_action_table(filtered[action_cols]),
+            use_container_width=True,
+            hide_index=True,
+        )
+
+    with details_tab:
+        st.dataframe(filtered, use_container_width=True, hide_index=True)
+
+    profile_cols = [col for col in FEATURE_COLS if col in results.columns]
+    if profile_cols:
+        with st.expander("Customer profile columns reference"):
+            st.caption("These fields were used as model inputs and appear in the full details tab.")
+            st.code(", ".join(profile_cols))
+
+    csv_bytes = filtered.to_csv(index=False).encode("utf-8")
     st.download_button(
         "Download prediction results (CSV)",
         data=csv_bytes,
@@ -431,134 +609,90 @@ def render_single_customer_tab(
     options: dict[str, list[str]],
 ) -> None:
     st.subheader("Customer Profile")
-    with st.form("customer_form"):
-        top_col1, top_col2 = st.columns(2)
+    st.caption(
+        "Key account and service fields for churn scoring. Other inputs use standard defaults."
+    )
 
-        with top_col1:
-            customer_id = st.text_input("Customer ID (optional)", value="")
-            gender = st.selectbox(
-                "Gender",
-                options["gender"],
-                index=options["gender"].index(st.session_state["field_gender"]),
-            )
-            senior = st.selectbox(
-                "Senior Citizen",
-                options=[0, 1],
-                format_func=lambda x: "Yes" if x == 1 else "No",
-                index=int(st.session_state["field_SeniorCitizen"]),
-            )
-            partner = st.selectbox(
-                "Partner",
-                options["Partner"],
-                index=options["Partner"].index(st.session_state["field_Partner"]),
-            )
-            dependents = st.selectbox(
-                "Dependents",
-                options["Dependents"],
-                index=options["Dependents"].index(st.session_state["field_Dependents"]),
-            )
+    # Outside the form so internet-dependent dropdown options refresh immediately.
+    internet = st.selectbox(
+        "Internet Service",
+        options=options["InternetService"],
+        index=_select_index("InternetService", options["InternetService"]),
+        key="profile_internet_service",
+    )
+    st.session_state["field_InternetService"] = internet
+
+    online_security_choices = _internet_addon_options(internet, "OnlineSecurity", options)
+    tech_support_choices = _internet_addon_options(internet, "TechSupport", options)
+    streaming_tv_choices = _internet_addon_options(internet, "StreamingTV", options)
+    streaming_movies_choices = _internet_addon_options(internet, "StreamingMovies", options)
+
+    with st.form("customer_form"):
+        col1, col2 = st.columns(2)
+
+        with col1:
             tenure = st.number_input(
                 "Tenure (months)",
                 min_value=0,
                 max_value=100,
-                value=int(st.session_state["field_tenure"]),
-            )
-            phone = st.selectbox(
-                "Phone Service",
-                options["PhoneService"],
-                index=options["PhoneService"].index(st.session_state["field_PhoneService"]),
-            )
-            multiple_line_options = options_for_multiple_lines(phone, options["MultipleLines"])
-            multiple_lines = st.selectbox(
-                "Multiple Lines",
-                options=multiple_line_options,
-                index=_index_for_option("MultipleLines", multiple_line_options),
-            )
-            internet = st.selectbox(
-                "Internet Service",
-                options["InternetService"],
-                index=options["InternetService"].index(st.session_state["field_InternetService"]),
-            )
-            online_security = st.selectbox(
-                "Online Security",
-                options=options_for_internet_dependent(internet, options["OnlineSecurity"]),
-                index=_index_for_option("OnlineSecurity", options_for_internet_dependent(internet, options["OnlineSecurity"])),
-            )
-            online_backup = st.selectbox(
-                "Online Backup",
-                options=options_for_internet_dependent(internet, options["OnlineBackup"]),
-                index=_index_for_option("OnlineBackup", options_for_internet_dependent(internet, options["OnlineBackup"])),
-            )
-
-        with top_col2:
-            device_protection = st.selectbox(
-                "Device Protection",
-                options=options_for_internet_dependent(internet, options["DeviceProtection"]),
-                index=_index_for_option("DeviceProtection", options_for_internet_dependent(internet, options["DeviceProtection"])),
-            )
-            tech_support = st.selectbox(
-                "Tech Support",
-                options=options_for_internet_dependent(internet, options["TechSupport"]),
-                index=_index_for_option("TechSupport", options_for_internet_dependent(internet, options["TechSupport"])),
-            )
-            streaming_tv = st.selectbox(
-                "Streaming TV",
-                options=options_for_internet_dependent(internet, options["StreamingTV"]),
-                index=_index_for_option("StreamingTV", options_for_internet_dependent(internet, options["StreamingTV"])),
-            )
-            streaming_movies = st.selectbox(
-                "Streaming Movies",
-                options=options_for_internet_dependent(internet, options["StreamingMovies"]),
-                index=_index_for_option("StreamingMovies", options_for_internet_dependent(internet, options["StreamingMovies"])),
+                value=int(_session_field("tenure")),
             )
             contract = st.selectbox(
                 "Contract",
-                options["Contract"],
-                index=options["Contract"].index(st.session_state["field_Contract"]),
-            )
-            paperless = st.selectbox(
-                "Paperless Billing",
-                options["PaperlessBilling"],
-                index=options["PaperlessBilling"].index(st.session_state["field_PaperlessBilling"]),
-            )
-            payment = st.selectbox(
-                "Payment Method",
-                options["PaymentMethod"],
-                index=options["PaymentMethod"].index(st.session_state["field_PaymentMethod"]),
+                options=options["Contract"],
+                index=_select_index("Contract", options["Contract"]),
             )
             monthly_charges = st.number_input(
                 "Monthly Charges ($)",
                 min_value=0.0,
-                value=float(st.session_state["field_MonthlyCharges"]),
+                value=float(_session_field("MonthlyCharges")),
                 step=1.0,
             )
             total_charges = st.text_input(
                 "Total Charges ($)",
-                value=str(st.session_state["field_TotalCharges"]),
+                value=str(_session_field("TotalCharges")),
                 help="Leave blank only when tenure is 0 (new customer).",
+            )
+
+        with col2:
+            online_security = st.selectbox(
+                "Online Security",
+                options=online_security_choices,
+                index=_select_index("OnlineSecurity", online_security_choices),
+            )
+            tech_support = st.selectbox(
+                "Tech Support",
+                options=tech_support_choices,
+                index=_select_index("TechSupport", tech_support_choices),
+            )
+            streaming_tv = st.selectbox(
+                "Streaming TV",
+                options=streaming_tv_choices,
+                index=_select_index("StreamingTV", streaming_tv_choices),
+            )
+            streaming_movies = st.selectbox(
+                "Streaming Movies",
+                options=streaming_movies_choices,
+                index=_select_index("StreamingMovies", streaming_movies_choices),
+            )
+            payment = st.selectbox(
+                "Payment Method",
+                options=options["PaymentMethod"],
+                index=_select_index("PaymentMethod", options["PaymentMethod"]),
             )
 
         submitted = st.form_submit_button("Predict Churn", type="primary", use_container_width=True)
 
     if submitted:
         form_values = {
-            "customerID": customer_id.strip() or None,
-            "gender": gender,
-            "SeniorCitizen": senior,
-            "Partner": partner,
-            "Dependents": dependents,
+            **_hidden_profile_defaults(),
             "tenure": tenure,
-            "PhoneService": phone,
-            "MultipleLines": multiple_lines,
             "InternetService": internet,
             "OnlineSecurity": online_security,
-            "OnlineBackup": online_backup,
-            "DeviceProtection": device_protection,
             "TechSupport": tech_support,
             "StreamingTV": streaming_tv,
             "StreamingMovies": streaming_movies,
             "Contract": contract,
-            "PaperlessBilling": paperless,
             "PaymentMethod": payment,
             "MonthlyCharges": monthly_charges,
             "TotalCharges": total_charges,
@@ -570,6 +704,7 @@ def render_single_customer_tab(
             return
 
         form_values, sync_notes = normalize_service_fields(form_values)
+        _sync_profile_session(form_values)
         for note in sync_notes:
             st.info(note)
 
@@ -585,8 +720,6 @@ def render_single_customer_tab(
 
         st.markdown("---")
         st.subheader("Prediction Results")
-        if result.get("customerID"):
-            st.caption(f"Customer ID: {result['customerID']}")
         render_prediction_results(result, threshold)
 
 
@@ -611,6 +744,7 @@ def main() -> None:
 
     with st.sidebar:
         render_model_summary(config)
+        render_developer_api_section()
 
     tab_single, tab_batch = st.tabs(["Single customer", "Batch upload"])
     with tab_single:

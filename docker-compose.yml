@@ -1,0 +1,27 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      CHURN_API_KEY: ${CHURN_API_KEY:-change-me-in-production}
+      ENVIRONMENT: production
+      LOG_JSON: "true"
+      LOG_LEVEL: INFO
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s
+
+  streamlit:
+    build: .
+    command: ["streamlit", "run", "app/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+    ports:
+      - "8501:8501"
+    environment:
+      ENVIRONMENT: production
+    depends_on:
+      api:
+        condition: service_healthy

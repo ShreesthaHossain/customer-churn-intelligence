@@ -1,0 +1,7 @@
+-r requirements-prod.txt
+
+# Development, notebooks, and tests
+matplotlib==3.10.1
+jupyter==1.1.1
+shap==0.47.2
+pytest==8.3.5

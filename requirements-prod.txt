@@ -1,0 +1,12 @@
+# Production/runtime dependencies (pinned for reproducible deploys)
+pandas==2.2.3
+numpy==2.2.3
+scikit-learn==1.6.1
+joblib==1.4.2
+xgboost==3.4.1
+imbalanced-learn==0.13.0
+streamlit==1.44.1
+fastapi==0.115.8
+uvicorn[standard]==0.34.0
+httpx==0.28.1
+python-dotenv==1.0.1
