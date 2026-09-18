@@ -35,6 +35,7 @@ from src.deployment import get_settings, load_env_file
 from src.policy import (
     HIGH_RISK_UI_BAND,
     NO_INTERNET_SERVICE,
+    NO_PHONE_SERVICE,
     classify_risk_level,
     normalize_service_fields,
     recommended_action,
@@ -236,6 +237,12 @@ def options_for_internet_dependent(internet_service: str, all_options: list[str]
     return all_options
 
 
+def options_for_phone_dependent(phone_service: str, all_options: list[str]) -> list[str]:
+    if phone_service == "No":
+        return [NO_PHONE_SERVICE]
+    return [option for option in all_options if option != NO_PHONE_SERVICE]
+
+
 def build_customer_record(form_values: dict[str, Any]) -> dict[str, Any]:
     record = dict(form_values)
     record["customerID"] = form_values.get("customerID") or None
@@ -402,21 +409,6 @@ def _init_session_defaults(defaults: dict[str, Any]) -> None:
 
 def _session_field(field: str) -> Any:
     return st.session_state[f"field_{field}"]
-
-
-def _hidden_profile_defaults() -> dict[str, Any]:
-    """Defaults for fields not shown in the simplified customer form."""
-    return {
-        "gender": _session_field("gender"),
-        "SeniorCitizen": int(_session_field("SeniorCitizen")),
-        "Partner": _session_field("Partner"),
-        "Dependents": _session_field("Dependents"),
-        "PhoneService": _session_field("PhoneService"),
-        "MultipleLines": _session_field("MultipleLines"),
-        "OnlineBackup": _session_field("OnlineBackup"),
-        "DeviceProtection": _session_field("DeviceProtection"),
-        "PaperlessBilling": _session_field("PaperlessBilling"),
-    }
 
 
 def render_batch_results(results: pd.DataFrame, *, session_model: bool = False) -> None:
@@ -609,20 +601,30 @@ def render_single_customer_tab(
     options: dict[str, list[str]],
 ) -> None:
     st.subheader("Customer Profile")
-    st.caption(
-        "Key account and service fields for churn scoring. Other inputs use standard defaults."
-    )
+    st.caption("All 19 model features are editable — every field affects the prediction.")
 
-    # Outside the form so internet-dependent dropdown options refresh immediately.
-    internet = st.selectbox(
-        "Internet Service",
-        options=options["InternetService"],
-        index=_select_index("InternetService", options["InternetService"]),
-        key="profile_internet_service",
-    )
-    st.session_state["field_InternetService"] = internet
+    service_col1, service_col2 = st.columns(2)
+    with service_col1:
+        phone = st.selectbox(
+            "Phone Service",
+            options=options["PhoneService"],
+            index=_select_index("PhoneService", options["PhoneService"]),
+            key="profile_phone_service",
+        )
+        st.session_state["field_PhoneService"] = phone
+    with service_col2:
+        internet = st.selectbox(
+            "Internet Service",
+            options=options["InternetService"],
+            index=_select_index("InternetService", options["InternetService"]),
+            key="profile_internet_service",
+        )
+        st.session_state["field_InternetService"] = internet
 
+    multiple_lines_choices = options_for_phone_dependent(phone, options["MultipleLines"])
     online_security_choices = _internet_addon_options(internet, "OnlineSecurity", options)
+    online_backup_choices = _internet_addon_options(internet, "OnlineBackup", options)
+    device_protection_choices = _internet_addon_options(internet, "DeviceProtection", options)
     tech_support_choices = _internet_addon_options(internet, "TechSupport", options)
     streaming_tv_choices = _internet_addon_options(internet, "StreamingTV", options)
     streaming_movies_choices = _internet_addon_options(internet, "StreamingMovies", options)
@@ -631,6 +633,28 @@ def render_single_customer_tab(
         col1, col2 = st.columns(2)
 
         with col1:
+            st.markdown("**Account & billing**")
+            gender = st.selectbox(
+                "Gender",
+                options=options["gender"],
+                index=_select_index("gender", options["gender"]),
+            )
+            senior = st.selectbox(
+                "Senior Citizen",
+                options=[0, 1],
+                format_func=lambda value: "Yes" if value == 1 else "No",
+                index=_select_index("SeniorCitizen", [0, 1]),
+            )
+            partner = st.selectbox(
+                "Partner",
+                options=options["Partner"],
+                index=_select_index("Partner", options["Partner"]),
+            )
+            dependents = st.selectbox(
+                "Dependents",
+                options=options["Dependents"],
+                index=_select_index("Dependents", options["Dependents"]),
+            )
             tenure = st.number_input(
                 "Tenure (months)",
                 min_value=0,
@@ -653,12 +677,38 @@ def render_single_customer_tab(
                 value=str(_session_field("TotalCharges")),
                 help="Leave blank only when tenure is 0 (new customer).",
             )
+            paperless = st.selectbox(
+                "Paperless Billing",
+                options=options["PaperlessBilling"],
+                index=_select_index("PaperlessBilling", options["PaperlessBilling"]),
+            )
+            payment = st.selectbox(
+                "Payment Method",
+                options=options["PaymentMethod"],
+                index=_select_index("PaymentMethod", options["PaymentMethod"]),
+            )
 
         with col2:
+            st.markdown("**Phone & internet add-ons**")
+            multiple_lines = st.selectbox(
+                "Multiple Lines",
+                options=multiple_lines_choices,
+                index=_select_index("MultipleLines", multiple_lines_choices),
+            )
             online_security = st.selectbox(
                 "Online Security",
                 options=online_security_choices,
                 index=_select_index("OnlineSecurity", online_security_choices),
+            )
+            online_backup = st.selectbox(
+                "Online Backup",
+                options=online_backup_choices,
+                index=_select_index("OnlineBackup", online_backup_choices),
+            )
+            device_protection = st.selectbox(
+                "Device Protection",
+                options=device_protection_choices,
+                index=_select_index("DeviceProtection", device_protection_choices),
             )
             tech_support = st.selectbox(
                 "Tech Support",
@@ -675,24 +725,27 @@ def render_single_customer_tab(
                 options=streaming_movies_choices,
                 index=_select_index("StreamingMovies", streaming_movies_choices),
             )
-            payment = st.selectbox(
-                "Payment Method",
-                options=options["PaymentMethod"],
-                index=_select_index("PaymentMethod", options["PaymentMethod"]),
-            )
 
         submitted = st.form_submit_button("Predict Churn", type="primary", use_container_width=True)
 
     if submitted:
         form_values = {
-            **_hidden_profile_defaults(),
+            "gender": gender,
+            "SeniorCitizen": senior,
+            "Partner": partner,
+            "Dependents": dependents,
             "tenure": tenure,
+            "PhoneService": phone,
+            "MultipleLines": multiple_lines,
             "InternetService": internet,
             "OnlineSecurity": online_security,
+            "OnlineBackup": online_backup,
+            "DeviceProtection": device_protection,
             "TechSupport": tech_support,
             "StreamingTV": streaming_tv,
             "StreamingMovies": streaming_movies,
             "Contract": contract,
+            "PaperlessBilling": paperless,
             "PaymentMethod": payment,
             "MonthlyCharges": monthly_charges,
             "TotalCharges": total_charges,

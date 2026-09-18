@@ -31,6 +31,8 @@ Hyperparameters (frozen): `n_estimators=200`, `max_depth=3`, `learning_rate=0.1`
 
 Evaluated **once** on the untouched 15% holdout (`n=1,057`) using the frozen pipeline and threshold. See `notebooks/17_final_test_evaluation.ipynb`.
 
+![Final test metrics at threshold 0.10](docs/images/final_test_metrics.png)
+
 | Metric | Test | Validation (reference) |
 |--------|------|------------------------|
 | **Accuracy** | 0.641 | 0.633 |
@@ -52,7 +54,7 @@ Evaluated **once** on the untouched 15% holdout (`n=1,057`) using the frozen pip
 
 **Validation vs test:** Metrics are broadly aligned. Test recall is slightly lower (0.908 vs 0.946) with more false negatives (26 vs 15), while PR-AUC is marginally higher on test. Ranking and calibration remain stable (ROC-AUC ~0.83–0.85, Brier ~0.14). Gaps are modest and consistent with sampling variation on ~1k-row holdouts — **not** used to retune the model.
 
-Artifacts: `reports/final_test_metrics.json`, `reports/final_validation_test_comparison.csv`, `reports/figures/15_final_test_confusion_matrix.png`
+Artifacts: `reports/final_test_metrics.json`, `reports/final_validation_test_comparison.csv`, `docs/images/final_test_metrics.png` (regenerate with `python scripts/generate_readme_metrics_figure.py`)
 
 ---
 

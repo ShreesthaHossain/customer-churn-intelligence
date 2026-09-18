@@ -19,11 +19,19 @@ CONFIG_PATH = PROJECT_ROOT / "models" / "model_config.json"
 @pytest.fixture(scope="module", autouse=True)
 def disable_api_key_auth():
     """Keep existing API tests working without requiring X-API-Key headers."""
+    import src.deployment as deployment
+
     previous = os.environ.pop("CHURN_API_KEY", None)
+    original_loader = deployment.load_env_file
+    deployment.load_env_file = lambda: None
     get_settings.cache_clear()
     yield
+    deployment.load_env_file = original_loader
+    get_settings.cache_clear()
     if previous is not None:
         os.environ["CHURN_API_KEY"] = previous
+    elif "CHURN_API_KEY" in os.environ:
+        os.environ.pop("CHURN_API_KEY")
     get_settings.cache_clear()
 
 
