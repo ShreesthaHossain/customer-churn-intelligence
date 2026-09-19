@@ -1,6 +1,5 @@
 """Tests for FastAPI churn prediction service."""
 
-import os
 from pathlib import Path
 
 import pytest
@@ -14,35 +13,6 @@ from src.model import load_churn_pipeline
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_PATH = PROJECT_ROOT / "models" / "churn_pipeline.joblib"
 CONFIG_PATH = PROJECT_ROOT / "models" / "model_config.json"
-
-
-@pytest.fixture(scope="module", autouse=True)
-def disable_api_key_auth():
-    """Keep existing API tests working without requiring X-API-Key headers."""
-    import src.deployment as deployment
-
-    previous = os.environ.pop("CHURN_API_KEY", None)
-    original_loader = deployment.load_env_file
-    deployment.load_env_file = lambda: None
-    get_settings.cache_clear()
-    yield
-    deployment.load_env_file = original_loader
-    get_settings.cache_clear()
-    if previous is not None:
-        os.environ["CHURN_API_KEY"] = previous
-    elif "CHURN_API_KEY" in os.environ:
-        os.environ.pop("CHURN_API_KEY")
-    get_settings.cache_clear()
-
-
-@pytest.fixture(scope="module")
-def client():
-    if not PIPELINE_PATH.exists() or not CONFIG_PATH.exists():
-        pytest.skip("model artifacts missing")
-    from api.main import app
-
-    with TestClient(app) as test_client:
-        yield test_client
 
 
 @pytest.mark.skipif(not PIPELINE_PATH.exists(), reason="pipeline artifact missing")

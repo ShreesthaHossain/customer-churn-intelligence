@@ -263,3 +263,35 @@ def score_uploaded_batch(
         output["actual_churn"] = working[TARGET_COL].reset_index(drop=True)
 
     return output.sort_values("churn_probability", ascending=False).reset_index(drop=True)
+
+
+BATCH_API_RESULT_COLUMNS = [
+    "primary_key",
+    "churn_probability",
+    "prediction",
+    "risk_level",
+    "retention_recommended",
+    "recommended_action",
+    "decision_threshold",
+]
+
+
+def build_batch_api_response(
+    results: pd.DataFrame,
+    *,
+    model_config: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Slim batch payload for API consumers (decision columns only)."""
+    missing = [col for col in BATCH_API_RESULT_COLUMNS if col not in results.columns]
+    if missing:
+        raise ValueError(f"Batch results missing columns: {missing}")
+
+    slim = results[BATCH_API_RESULT_COLUMNS].copy()
+    flagged = int(slim["retention_recommended"].sum())
+    return {
+        "model_version": model_version_from_config(model_config),
+        "customers_scored": len(slim),
+        "retention_outreach_flagged": flagged,
+        "decision_threshold": float(slim["decision_threshold"].iloc[0]),
+        "results": slim.to_dict(orient="records"),
+    }

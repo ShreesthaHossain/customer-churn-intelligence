@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
 import pytest
+from fastapi.testclient import TestClient
+
+from src.deployment import get_settings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 PIPELINE_PATH = PROJECT_ROOT / "models" / "churn_pipeline.joblib"
@@ -60,3 +64,32 @@ def sample_api_payload(validation_customer_record) -> dict[str, Any]:
     payload = dict(validation_customer_record)
     payload.pop("Churn", None)
     return payload
+
+
+@pytest.fixture(scope="module", autouse=True)
+def disable_api_key_auth_for_api_tests():
+    """Disable API-key auth and .env loading during API tests."""
+    import src.deployment as deployment
+
+    previous = os.environ.pop("CHURN_API_KEY", None)
+    original_loader = deployment.load_env_file
+    deployment.load_env_file = lambda: None
+    get_settings.cache_clear()
+    yield
+    deployment.load_env_file = original_loader
+    get_settings.cache_clear()
+    if previous is not None:
+        os.environ["CHURN_API_KEY"] = previous
+    elif "CHURN_API_KEY" in os.environ:
+        os.environ.pop("CHURN_API_KEY")
+    get_settings.cache_clear()
+
+
+@pytest.fixture(scope="module")
+def client():
+    if not PIPELINE_PATH.exists() or not MODEL_CONFIG_PATH.exists():
+        pytest.skip("model artifacts missing")
+    from api.main import app
+
+    with TestClient(app) as test_client:
+        yield test_client

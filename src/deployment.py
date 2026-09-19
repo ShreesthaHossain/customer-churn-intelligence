@@ -22,6 +22,7 @@ class DeploymentSettings:
 
     api_key: str | None
     api_base_url: str
+    batch_max_rows: int
     log_level: str
     log_json: bool
     environment: str
@@ -64,6 +65,7 @@ def get_settings() -> DeploymentSettings:
     return DeploymentSettings(
         api_key=os.getenv("CHURN_API_KEY") or None,
         api_base_url=os.getenv("CHURN_API_BASE_URL", "http://127.0.0.1:8000"),
+        batch_max_rows=int(os.getenv("BATCH_MAX_ROWS", "10000")),
         log_level=os.getenv("LOG_LEVEL", "INFO").upper(),
         log_json=_env_bool("LOG_JSON", False),
         environment=os.getenv("ENVIRONMENT", "development"),
@@ -90,6 +92,8 @@ class JsonLogFormatter(logging.Formatter):
             "prediction",
             "model_version",
             "event",
+            "batch_size",
+            "retention_outreach_flagged",
         ):
             if hasattr(record, key):
                 payload[key] = getattr(record, key)

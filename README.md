@@ -193,10 +193,21 @@ uvicorn api.main:app --reload
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/health` | Service and model status |
+| GET | `/health` | Service, model, and runtime counters |
+| GET | `/monitoring/summary` | Prediction volume + latest drift status |
 | POST | `/predict_churn` | Score one customer (Pydantic-validated JSON) |
+| POST | `/predict_churn_batch` | Score many customers from JSON list |
+| POST | `/predict_churn_batch/file` | Score Telco-compatible CSV upload |
 
-Example response fields: `churn_probability`, `threshold`, `prediction`, `risk_level`, `recommended_action`, `model_version`.
+Single-customer response fields: `churn_probability`, `threshold`, `prediction`, `risk_level`, `recommended_action`, `model_version`.
+
+Batch response fields: `customers_scored`, `retention_outreach_flagged`, and per-row `primary_key`, `churn_probability`, `risk_level`, `recommended_action`.
+
+Optional auth: set `CHURN_API_KEY` and send header `X-API-Key`. Drift check script:
+
+```bash
+python scripts/run_drift_check.py
+```
 
 ---
 
@@ -206,7 +217,7 @@ Example response fields: `churn_probability`, `threshold`, `prediction`, `risk_l
 pytest tests/ -v
 ```
 
-Coverage includes data cleaning, splits, preprocessing, inference, upload compatibility, policy consistency, saved artifact loading, API parity with Python inference, and unseen-category handling. **79 tests** (validation/test artifacts; no test-set tuning in tests).
+Coverage includes data cleaning, splits, preprocessing, inference, upload compatibility, policy consistency, saved artifact loading, API parity with Python inference, batch API routes, monitoring helpers, and unseen-category handling.
 
 ---
 
@@ -226,6 +237,7 @@ Coverage includes data cleaning, splits, preprocessing, inference, upload compat
 |--------|-----------------|--------|
 | **Feature drift** | Distribution shift vs training/validation baselines (PSI, KS) on key fields (`tenure`, `Contract`, `MonthlyCharges`, service flags) | Alert if PSI > 0.2; review data pipeline and retrain if sustained |
 | **Prediction-score drift** | Mean/median calibrated `P(churn)`, score histograms, fraction above threshold 0.10 | Alert on >2σ shift week-over-week; check upstream feature changes |
+| **Implemented in repo** | `/monitoring/summary`, optional `PREDICTION_LOG_PATH`, `scripts/run_drift_check.py` | Run drift script after batch scoring or on schedule |
 | **Churn-rate drift** | Realized churn rate vs ~26.5% training prior | Investigate market/regulatory changes; may require policy review (not automatic retuning) |
 | **Calibration / performance drift** | Rolling Brier score, PR-AUC on labeled holdout; precision/recall at threshold 0.10 | Quarterly recalibration evaluation on fresh validation slice; retrain only through governed ML lifecycle |
 

@@ -321,10 +321,12 @@ def render_developer_api_section() -> None:
     st.link_button("Open interactive API docs", settings.api_docs_url, use_container_width=True)
     st.markdown(f"**Health check:** [{settings.api_health_url}]({settings.api_health_url})")
     st.markdown("**Score one customer:** `POST /predict_churn`")
+    st.markdown("**Score many customers:** `POST /predict_churn_batch` (JSON) or `POST /predict_churn_batch/file` (CSV)")
     st.markdown(
-        "Send the same 19 customer fields as JSON. Response includes "
-        "`churn_probability`, `risk_level`, and `recommended_action`."
+        "Send the same 19 customer fields as JSON. Batch responses include "
+        "`churn_probability`, `risk_level`, and `recommended_action` for each row."
     )
+    st.markdown(f"**Monitoring:** [{settings.api_base_url.rstrip('/')}/monitoring/summary]({settings.api_base_url.rstrip('/')}/monitoring/summary)")
 
     if settings.auth_enabled:
         st.info(
