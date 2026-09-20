@@ -289,7 +289,7 @@ export CHURN_API_KEY=your-secret-key  # Linux/macOS
 
 Clients must then send `X-API-Key: your-secret-key` on `POST /predict_churn`. `/health` stays public.
 
-### 5. Docker (production scaffold)
+### 5. Docker (local or production)
 
 ```bash
 docker compose up --build
@@ -300,7 +300,23 @@ docker compose up --build
 
 Copy `.env.example` to `.env` and set `CHURN_API_KEY` before deploying.
 
-### 6. Tests
+### 6. Deploy free to Render (recommended for portfolio)
+
+**Best free professional setup:** prebuilt Docker image (GitHub Actions) + two Render free web services (API + Streamlit).
+
+Full step-by-step: **[docs/DEPLOY.md](docs/DEPLOY.md)**
+
+Quick summary:
+
+1. Push to `main` → wait for **Publish Docker Image** workflow (GitHub Actions).
+2. [Render Dashboard](https://dashboard.render.com) → **New → Blueprint** → connect this repo → **Apply**.
+3. Use the generated URLs in your README:
+   - `churn-api` → `/docs` for Swagger UI
+   - `churn-streamlit` → live demo
+
+Render auto-generates `CHURN_API_KEY`; Streamlit gets the API URL automatically via `render.yaml`.
+
+### 7. Tests
 
 ```bash
 pytest tests/ -v
@@ -309,7 +325,7 @@ python scripts/audit_project.py
 
 CI (GitHub Actions) runs bootstrap + tests + audit on every push/PR.
 
-### 7. Notebooks
+### 8. Notebooks
 
 Execute in order (`01_eda` … `17_final_test_evaluation`) for the full analytical narrative.
 

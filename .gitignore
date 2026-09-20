@@ -68,3 +68,5 @@ models/*
 # Generated reports and figures
 reports/figures/*
 !reports/figures/.gitkeep
+reports/monitoring/*
+!reports/monitoring/.gitkeep

@@ -1,0 +1,44 @@
+# Render Blueprint — free-tier API + Streamlit from prebuilt GHCR image.
+# 1) Push to main so GitHub Actions publishes ghcr.io/shreesthahossain/customer-churn-intelligence:latest
+# 2) Render Dashboard → New → Blueprint → connect this repo → Apply
+
+services:
+  - type: web
+    name: churn-api
+    runtime: image
+    plan: free
+    region: oregon
+    image:
+      url: ghcr.io/shreesthahossain/customer-churn-intelligence:latest
+    dockerCommand: sh scripts/docker_entrypoint.sh
+    healthCheckPath: /health
+    envVars:
+      - key: SERVICE_MODE
+        value: api
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_JSON
+        value: "true"
+      - key: LOG_LEVEL
+        value: INFO
+      - key: CHURN_API_KEY
+        generateValue: true
+
+  - type: web
+    name: churn-streamlit
+    runtime: image
+    plan: free
+    region: oregon
+    image:
+      url: ghcr.io/shreesthahossain/customer-churn-intelligence:latest
+    dockerCommand: sh scripts/docker_entrypoint.sh
+    envVars:
+      - key: SERVICE_MODE
+        value: streamlit
+      - key: ENVIRONMENT
+        value: production
+      - key: CHURN_API_BASE_URL
+        fromService:
+          type: web
+          name: churn-api
+          envVarKey: RENDER_EXTERNAL_URL

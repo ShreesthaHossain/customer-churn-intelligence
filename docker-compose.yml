@@ -1,9 +1,12 @@
 services:
   api:
     build: .
+    command: ["sh", "scripts/docker_entrypoint.sh"]
     ports:
       - "8000:8000"
     environment:
+      SERVICE_MODE: api
+      PORT: "8000"
       CHURN_API_KEY: ${CHURN_API_KEY:-change-me-in-production}
       ENVIRONMENT: production
       LOG_JSON: "true"
@@ -17,10 +20,13 @@ services:
 
   streamlit:
     build: .
-    command: ["streamlit", "run", "app/app.py", "--server.address=0.0.0.0", "--server.port=8501"]
+    command: ["sh", "scripts/docker_entrypoint.sh"]
     ports:
       - "8501:8501"
     environment:
+      SERVICE_MODE: streamlit
+      PORT: "8501"
+      CHURN_API_BASE_URL: http://api:8000
       ENVIRONMENT: production
     depends_on:
       api:

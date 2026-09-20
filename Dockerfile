@@ -1,10 +1,13 @@
 FROM python:3.11-slim
 
+LABEL org.opencontainers.image.source=https://github.com/ShreesthaHossain/customer-churn-intelligence
+
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     ENVIRONMENT=production \
-    LOG_JSON=true
+    LOG_JSON=true \
+    SERVICE_MODE=api
 
 WORKDIR /app
 
@@ -17,8 +20,8 @@ RUN pip install --upgrade pip && pip install -r requirements-prod.txt
 
 COPY . .
 
-RUN python scripts/bootstrap_artifacts.py
+RUN python scripts/bootstrap_artifacts.py && chmod +x scripts/docker_entrypoint.sh
 
 EXPOSE 8000
 
-CMD ["uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["sh", "scripts/docker_entrypoint.sh"]
