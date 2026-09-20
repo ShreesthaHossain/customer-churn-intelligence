@@ -96,6 +96,7 @@ docker compose up --build
 | Issue | Fix |
 |-------|-----|
 | Render deploy fails “image not found” | Wait for GitHub Actions to finish; confirm package is **public** on GHCR |
+| Docker build fails on `pip install` | Image uses **Python 3.12+** (required by `xgboost==3.4.1`); re-run **Publish Docker Image** |
 | API returns 401 | Send `X-API-Key` header; copy key from Render env vars |
 | Streamlit sidebar API links wrong | Confirm `CHURN_API_BASE_URL` on `churn-streamlit` points to API `RENDER_EXTERNAL_URL` |
 | Slow first load | Free tier cold start — normal for portfolio demos |
