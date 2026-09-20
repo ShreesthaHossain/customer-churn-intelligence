@@ -29,6 +29,14 @@ Check: **GitHub → Actions → Publish Docker Image → green checkmark**
 
 Verify image: `https://github.com/ShreesthaHossain/customer-churn-intelligence/pkgs/container/customer-churn-intelligence`
 
+**Important — make the image public (one time):**
+
+1. Open the package link above (or GitHub → your profile → **Packages** → `customer-churn-intelligence`)
+2. Click **Package settings** (right side)
+3. Scroll to **Danger Zone** → **Change visibility** → **Public**
+
+Render’s free tier cannot pull a **private** GHCR image without registry credentials.
+
 ### Step 2 — Create a Render account
 
 1. Go to [render.com](https://render.com) and sign up (GitHub login is easiest).
