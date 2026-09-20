@@ -65,6 +65,17 @@ app = FastAPI(
 app.include_router(batch_router)
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    """Friendly landing page — bare `/` otherwise returns 404."""
+    return {
+        "service": "Customer Churn Intelligence API",
+        "docs": "/docs",
+        "health": "/health",
+        "predict": "POST /predict_churn",
+    }
+
+
 @app.middleware("http")
 async def request_logging_middleware(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))

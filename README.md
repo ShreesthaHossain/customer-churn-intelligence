@@ -2,6 +2,14 @@
 
 Portfolio-quality ML engineering project that predicts telecom customer churn probability and converts it into a business retention decision.
 
+## Live Demo
+
+- **Dashboard:** [churn-streamlit-f3id.onrender.com](https://churn-streamlit-f3id.onrender.com)
+- **API docs:** [churn-api-ufnm.onrender.com/docs](https://churn-api-ufnm.onrender.com/docs)
+- **Health check:** [churn-api-ufnm.onrender.com/health](https://churn-api-ufnm.onrender.com/health)
+
+*Free Render hosting — first load after ~15 min idle may take 30–60 seconds.*
+
 ## Problem Statement
 
 Predict the probability that an **active** telecom customer will churn, then apply a **frozen decision policy** to recommend retention outreach. The goal is not accuracy alone — ranking quality (PR-AUC), calibration, and cost-aware thresholding matter for imbalanced churn (~26.5% positive class).

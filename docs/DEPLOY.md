@@ -60,6 +60,10 @@ Render auto-generates `CHURN_API_KEY` for the API. Streamlit receives `CHURN_API
 
 ### Step 4 — Smoke test
 
+Use the **exact URLs** from each Render service page (they look like `https://churn-api-xxxx.onrender.com`).
+
+For the API, use `/health` or `/docs` (or `/` after redeploying the latest image).
+
 ```bash
 # Health (no auth)
 curl https://YOUR-API-URL.onrender.com/health
